@@ -1,0 +1,70 @@
+c-table: [c: {r, g, b}]
+w: int
+h: int
+pix: c[]
+
+
+\0: Section separator
+\1 <char>: Alpha modify pixel
+\2 <char>: Repeat pixel
+\3 <char> <char> <char>: Single use pixel
+\4 <char>*: Following byte(s) will be cTable pixel shorthands
+\5: End cTable
+
+Can be nested in the following heirarchy:
+\2 <char>
+	\1 <char>
+		\3 <char> <char> <char>
+
+1,\0,\7,255,255,255,\0,1,\0,4,\0,\7,\1,200,\7,\2,2,\1,250,\6
+
+1, \0			# number of bytes used for ctable keys
+\6, 255, 255, 255, \5	# ctable key w/ color
+1, \0			# width
+5, \0			# height
+\6			# 1 pixel of \6
+\1, 200, \7		# pixel with modified alpha 200, \6 color
+\2, 2, \0		# next pixel in place 2 times
+\1, 250, \7		# pixel with modified alpha 250, \6 color
+\3, 14, 54, 255		# Pixel with value rgb(14,54,255)
+
+
+1, 0			# number of bytes used for ctable keys
+5, 255, 255, 255, 0	# ctable key w/ color
+1, 0			# width
+5, 0			# height
+5			# 1 pixel of \5
+<1, 200>, 5		# pixel with modified alpha 200, \5 color
+<<2, 2>			# next pixel in place 2 times
+<1, 250>, 5>		# pixel with modified alpha 250, \5 color
+3, 14, 54, 255		# Pixel with value rgb(14,54,255)
+
+
+class PsbImage
+{
+	struct Pixel {
+		char r;
+		char g;
+		char b;
+		char a;
+
+		Pixel(char r, char g, char b, char a);
+	};
+
+	std::map<int, std::pair<int, Pixel>> cTable;  // cTable_id: [count, pixel_value]
+	int width;
+	int height;
+
+	std::list<Pixel> pixels;
+
+	bool checkForColorInTable(Pixel pix);
+	void addColorToTable(Pixel pix);
+	
+	std::list<char> writeCTable();
+	std::list<char> writeDimensions();
+	std::list<char> writePixels();
+
+public:
+	void addPixel(Pixel pix);
+	void writeImageToFile(std::string filename);
+};
