@@ -22,19 +22,18 @@ class PsbImage
 		bool equals(Pixel otherPix);
 	};
 
-	struct CTableValue
+	struct CTable
 	{
-		int count;
-		Pixel pixelValue;
-
-		CTableValue(Pixel pixelValue, int count);
-		CTableValue();
-	};
-
-	struct ColorTable
-	{
-		std::map<int, Pixel> colors;			// colorId: color
-		std::map<int, int> colorFrequency;		// colorId: frequency
+		// String = r + g + b, int = frequency
+		std::map<std::string, int> table;
+		std::map<std::string, int> shorthands;
+		
+		// Returns a vector with the contents of table sorted in order by frequency (0 will be highest freq)
+		// string = key, int = shorthand
+		std::vector<std::pair<std::string, int>> sort();
+		
+		// Adds pixel value to this table
+		void addToTable(Pixel* pix);
 	};
 
 	enum class TableMode
@@ -44,16 +43,16 @@ class PsbImage
 		GreaterThanHalf
 	};
 
-	std::map<int, CTableValue> cTable;  // cTable_id: [count, pixel_value]
-	int nextCTableVal;
 	int width;
 	int height;
 	char shorthandBytes;
 	TableMode tableMode;
 
+	CTable imageCTable;
+
 	std::vector<Pixel> pixels;
 
-	int checkForColorInTable(Pixel pix, std::map<int, PsbImage::Pixel>* table);
+	int checkForColorInTable(Pixel pix, CTable* table);
 	void addColorToTable(Pixel pix);
 
 	std::list<char> byteListFromInt(int i);

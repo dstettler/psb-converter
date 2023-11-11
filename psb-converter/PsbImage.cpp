@@ -1,6 +1,8 @@
 #include "PsbImage.h"
 
+#include <algorithm>
 #include <vector>
+#include <string>
 #include <charconv>
 #include <fstream>
 
@@ -28,44 +30,53 @@ bool PsbImage::Pixel::equals(Pixel otherPix)
 		a == otherPix.a;
 }
 
-PsbImage::CTableValue::CTableValue(Pixel pixelValue, int count = 0)
+void PsbImage::CTable::addToTable(Pixel* pix)
 {
-	this->count = count;
-	this->pixelValue = pixelValue;
-}
-
-PsbImage::CTableValue::CTableValue()
-{
-	this->count = 0;
-	this->pixelValue = Pixel();
-}
-
-int PsbImage::checkForColorInTable(Pixel pix, std::map<int, PsbImage::Pixel>* table = nullptr)
-{
-	
-	for (auto _tableIterator = cTable.begin(); _tableIterator != cTable.end(); ++_tableIterator)
+	std::string key = std::string() + pix->r + pix->g + pix->b;
+	if (table.find(key) != table.end())
 	{
-		Pixel _currentPix = _tableIterator->second.pixelValue;
-		if (_currentPix.r == pix.r && _currentPix.g == pix.g && _currentPix.b == pix.b)
-			return _tableIterator->first;
-	}
-	
-	return -1;
-}
-
-void PsbImage::addColorToTable(Pixel pix)
-{
-	int _colorId = checkForColorInTable(pix);
-	if (_colorId != -1)
-	{
-		cTable[_colorId].count += 1;
+		table[key] += 1;
 	}
 	else
 	{
-		// Init this color in the cTable
-		PsbImage::CTableValue _value(pix, 1);
-		cTable.emplace(nextCTableVal++, _value);
+		table.emplace(key, 1);
+		shorthands.emplace(key, nextShorthand);
+		nextShorthand++;
 	}
+}
+
+bool cTableSortComp(std::pair<std::string, int> &a, std::pair<std::string, int> &b)
+{
+	return a.second < b.second;
+}
+
+std::vector<std::pair<std::string, int>> PsbImage::CTable::sort()
+{
+	std::vector<std::pair<std::string, int>> _freqPairs;
+	for (auto iter = table.begin(); iter != table.end(); iter++)
+		_freqPairs.push_back(std::pair<std::string, int>(iter->first, iter->second));
+
+	// Sort frequency pairs by frequency
+	std::sort(_freqPairs.begin(), _freqPairs.end(), cTableSortComp);
+
+	// Convert newly sorted pairs to versions with their newly given shorthand
+	std::vector<std::pair<std::string, int>> _shorthandedPairs;
+	for (std::pair<std::string, int> pair : _freqPairs)
+		_shorthandedPairs.push_back(std::pair<std::string, int>(pair.first, shorthands[pair.first]));
+
+	return _shorthandedPairs;
+}
+
+int PsbImage::checkForColorInTable(Pixel pix, CTable* table)
+{
+	
+	std::string key = std::string() + pix.r + pix.g + pix.b;
+	if (table->shorthands.find(key) != table->shorthands.end())
+	{
+		return table->shorthands.find(key)->second;
+	}
+
+	return -1;
 }
 
 std::list<char> PsbImage::byteListFromInt(int i)
@@ -134,7 +145,7 @@ std::list<char> PsbImage::getPixelBytes(Pixel pix, std::map<int, PsbImage::Pixel
 {
 	std::list<char> _pixelsList;
 
-	int _shorthand = checkForColorInTable(pix);
+	int _shorthand = checkForColorInTable(pix, &imageCTable);
 	
 	if (pix.a != 255)
 	{
@@ -163,25 +174,27 @@ std::list<char> PsbImage::getPixelBytes(Pixel pix, std::map<int, PsbImage::Pixel
 
 std::map<int, PsbImage::Pixel> PsbImage::generateCTable()
 {
-	// Get highest possible color frequency
-	int _maxCount = 0;
-	for (auto _iter = cTable.begin(); _iter != cTable.end(); ++_iter)
+	std::vector<std::pair<std::string, int>> sortedTable = imageCTable.sort();
+	int _maxIndex = sortedTable.size();
+	int _theoreticalMax = std::pow(2, (shorthandBytes * 4));
+
+	if (_maxIndex <= sortedTable.size())
+		_maxIndex = _theoreticalMax - 1;
+
+	std::map<int, PsbImage::Pixel> _finalTable;
+	for (int i = 0; i < _maxIndex; i++)
 	{
-		if (_iter->second.count > _maxCount)
-			_maxCount = _iter->second.count;
+		std::string key = sortedTable.at(i).first;
+		PsbImage::Pixel pix(key.at(0), key.at(1), key.at(2));
+		_finalTable.emplace(sortedTable.at(i).second);
 	}
 
-	std::map<int, PsbImage::Pixel> _map;
-	int _filled = 0;
-	while (_filled <= 255 * shorthandBytes && _map.size() < )
-	{
-
-	}
+	return _finalTable;
 }
 
 void PsbImage::setShorthandBytesCount()
 {
-	shorthandBytes = 2;
+	shorthandBytes = 1;
 }
 
 std::list<char> PsbImage::writePixels()
@@ -216,7 +229,7 @@ std::list<char> PsbImage::writePixels()
 void PsbImage::addPixel(PsbImage::Pixel pix)
 {
 	pixels.push_back(pix);
-	addColorToTable(pix);
+	imageCTable.addToTable(&pix);
 }
 
 void PsbImage::writeImageToFile(std::string filename)
@@ -241,7 +254,7 @@ void PsbImage::writeImageToFile(std::string filename)
 
 PsbImage::PsbImage(int width, int height, TableMode tableMode)
 {
-	nextCTableVal = 6;
+	imageCTable.nextShorthand = 6;
 	this->width = width;
 	this->height = height;
 	this->tableMode = tableMode;
